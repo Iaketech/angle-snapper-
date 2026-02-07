@@ -22,6 +22,9 @@ local Settings = {
 	Indicators = true
 }
 
+-- KEYBINDS
+local TOGGLE_KEY = Enum.KeyCode.X -- toggle angle snap
+
 --------------------------------------------------
 -- CHARACTER
 --------------------------------------------------
@@ -117,8 +120,8 @@ local function createArc(side)
 	end
 end
 
-createArc(-1) -- left
-createArc(1)  -- right
+createArc(-1)
+createArc(1)
 
 LP.CharacterAdded:Connect(function()
 	task.wait(1)
@@ -225,7 +228,8 @@ end
 --------------------------------------------------
 -- CONTROLS
 --------------------------------------------------
-Button("Angle Snap : ON",70,function(b)
+local angleButton
+angleButton = Button("Angle Snap : ON",70,function(b)
 	Settings.Enabled = not Settings.Enabled
 	b.Text = Settings.Enabled and "Angle Snap : ON" or "Angle Snap : OFF"
 end)
@@ -233,4 +237,17 @@ end)
 Button("Indicators : ON",120,function(b)
 	Settings.Indicators = not Settings.Indicators
 	b.Text = Settings.Indicators and "Indicators : ON" or "Indicators : OFF"
+end)
+
+--------------------------------------------------
+-- KEYBIND TOGGLE (X)
+--------------------------------------------------
+UIS.InputBegan:Connect(function(i,gp)
+	if gp then return end
+	if i.KeyCode == TOGGLE_KEY then
+		Settings.Enabled = not Settings.Enabled
+		if angleButton then
+			angleButton.Text = Settings.Enabled and "Angle Snap : ON" or "Angle Snap : OFF"
+		end
+	end
 end)
