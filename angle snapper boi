@@ -1,1 +1,236 @@
+--//////////////////////////////////////////////////
+-- Lake Tech – Angle Snapper
+-- made by falselist
+--//////////////////////////////////////////////////
 
+-- SERVICES
+local Players = game:GetService("Players")
+local UIS = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+local LP = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+--------------------------------------------------
+-- SETTINGS
+--------------------------------------------------
+local Settings = {
+	Enabled = true,
+	SnapAngle = 45,
+	Threshold = 10,
+	Cooldown = 0.25,
+	Indicators = true
+}
+
+--------------------------------------------------
+-- CHARACTER
+--------------------------------------------------
+local function Char()
+	return LP.Character or LP.CharacterAdded:Wait()
+end
+
+local function Root()
+	return Char():WaitForChild("HumanoidRootPart")
+end
+
+local function Hum()
+	return Char():WaitForChild("Humanoid")
+end
+
+--------------------------------------------------
+-- ANGLE SNAP (STABLE, SHIFTLOCK SAFE)
+--------------------------------------------------
+local lastSnap = 0
+local armed = true
+
+RunService.RenderStepped:Connect(function()
+	if not Settings.Enabled then return end
+	if UIS.MouseBehavior ~= Enum.MouseBehavior.LockCenter then return end
+
+	local dx = UIS:GetMouseDelta().X
+
+	if math.abs(dx) < 2 then
+		armed = true
+		return
+	end
+
+	if not armed then return end
+	if math.abs(dx) < Settings.Threshold then return end
+	if tick() - lastSnap < Settings.Cooldown then return end
+
+	local root = Root()
+	local hum = Hum()
+
+	local _, camYaw, _ = Camera.CFrame:ToOrientation()
+	local baseYaw = math.deg(camYaw)
+	local targetYaw = baseYaw + (dx > 0 and Settings.SnapAngle or -Settings.SnapAngle)
+
+	hum.AutoRotate = false
+	root.CFrame =
+		CFrame.new(root.Position) *
+		CFrame.Angles(0, math.rad(targetYaw), 0)
+
+	task.delay(0.08, function()
+		if hum then hum.AutoRotate = true end
+	end)
+
+	lastSnap = tick()
+	armed = false
+end)
+
+--------------------------------------------------
+-- CLEAN PURPLE ANGLE INDICATORS
+--------------------------------------------------
+local indicators = {}
+local ARC_POINTS = 6
+local ARC_RADIUS = 6
+
+local function clearIndicators()
+	for _,v in ipairs(indicators) do
+		v:Destroy()
+	end
+	indicators = {}
+end
+
+local function createArc(side)
+	for i = 1, ARC_POINTS do
+		local p = Instance.new("Part")
+		p.Anchored = true
+		p.CanCollide = false
+		p.Size = Vector3.new(0.28, 0.28, 1.6)
+		p.Material = Enum.Material.SmoothPlastic
+		p.Color = Color3.fromRGB(170, 110, 255)
+		p.Transparency = 0.35
+		p.CastShadow = false
+		p.Parent = workspace
+
+		local light = Instance.new("PointLight", p)
+		light.Range = 5
+		light.Brightness = 0.6
+		light.Color = p.Color
+
+		table.insert(indicators,{
+			part = p,
+			side = side,
+			step = i / ARC_POINTS
+		})
+	end
+end
+
+createArc(-1) -- left
+createArc(1)  -- right
+
+LP.CharacterAdded:Connect(function()
+	task.wait(1)
+	clearIndicators()
+	createArc(-1)
+	createArc(1)
+end)
+
+RunService.RenderStepped:Connect(function()
+	if not Settings.Indicators then
+		for _,i in ipairs(indicators) do
+			i.part.Transparency = 1
+		end
+		return
+	end
+
+	local root = Char():FindFirstChild("HumanoidRootPart")
+	if not root then return end
+
+	for _,i in ipairs(indicators) do
+		local yaw = i.side * Settings.SnapAngle * i.step
+		local dist = ARC_RADIUS + (i.step * 1.2)
+
+		i.part.CFrame =
+			root.CFrame *
+			CFrame.Angles(0, math.rad(yaw), 0) *
+			CFrame.new(0, 0, -dist)
+	end
+end)
+
+--------------------------------------------------
+-- GUI
+--------------------------------------------------
+local gui = Instance.new("ScreenGui", LP.PlayerGui)
+gui.ResetOnSpawn = false
+
+UIS.InputBegan:Connect(function(i,gp)
+	if gp then return end
+	if i.KeyCode == Enum.KeyCode.RightShift then
+		gui.Enabled = not gui.Enabled
+	end
+end)
+
+local frame = Instance.new("Frame", gui)
+frame.Size = UDim2.fromOffset(460,260)
+frame.Position = UDim2.fromScale(0.5,0.5)
+frame.AnchorPoint = Vector2.new(0.5,0.5)
+frame.BackgroundColor3 = Color3.fromRGB(18,18,26)
+frame.BorderSizePixel = 0
+Instance.new("UICorner", frame)
+
+-- Drag
+do
+	local dragging, startPos, startInput
+	frame.InputBegan:Connect(function(i)
+		if i.UserInputType == Enum.UserInputType.MouseButton1 then
+			dragging = true
+			startInput = i.Position
+			startPos = frame.Position
+		end
+	end)
+	UIS.InputChanged:Connect(function(i)
+		if dragging and i.UserInputType == Enum.UserInputType.MouseMovement then
+			local delta = i.Position - startInput
+			frame.Position = UDim2.new(
+				startPos.X.Scale, startPos.X.Offset + delta.X,
+				startPos.Y.Scale, startPos.Y.Offset + delta.Y
+			)
+		end
+	end)
+	UIS.InputEnded:Connect(function(i)
+		if i.UserInputType == Enum.UserInputType.MouseButton1 then
+			dragging = false
+		end
+	end)
+end
+
+-- Title
+local title = Instance.new("TextLabel", frame)
+title.Size = UDim2.new(1,0,0,48)
+title.Text = "Lake Tech – Angle Snapper\nmade by falselist"
+title.Font = Enum.Font.GothamBold
+title.TextSize = 14
+title.TextColor3 = Color3.new(1,1,1)
+title.BackgroundTransparency = 1
+
+--------------------------------------------------
+-- BUTTON HELPER
+--------------------------------------------------
+local function Button(text,y,cb)
+	local b = Instance.new("TextButton", frame)
+	b.Position = UDim2.fromOffset(20,y)
+	b.Size = UDim2.fromOffset(420,34)
+	b.Text = text
+	b.Font = Enum.Font.GothamSemibold
+	b.TextSize = 14
+	b.BackgroundColor3 = Color3.fromRGB(90,70,160)
+	b.TextColor3 = Color3.new(1,1,1)
+	Instance.new("UICorner", b)
+	b.MouseButton1Click:Connect(function() cb(b) end)
+	return b
+end
+
+--------------------------------------------------
+-- CONTROLS
+--------------------------------------------------
+Button("Angle Snap : ON",70,function(b)
+	Settings.Enabled = not Settings.Enabled
+	b.Text = Settings.Enabled and "Angle Snap : ON" or "Angle Snap : OFF"
+end)
+
+Button("Indicators : ON",120,function(b)
+	Settings.Indicators = not Settings.Indicators
+	b.Text = Settings.Indicators and "Indicators : ON" or "Indicators : OFF"
+end)
